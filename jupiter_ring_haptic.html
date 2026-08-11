@@ -1,0 +1,114 @@
+<h2 class="sr-only">Demo of the ring spinning with momentum and haptic feedback on each card tick</h2>
+<div id="outer" style="transform:rotate(-10deg);">
+<div id="stage" style="position:relative; height:290px; touch-action:pan-y; user-select:none; overflow:visible;">
+  <div id="ringback" style="position:absolute; inset:0; z-index:1;"></div>
+  <div id="planet" style="position:absolute; left:50%; top:50%; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%; background:var(--surface-1); border:0.5px solid var(--border); z-index:2; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:500; color:var(--text-accent); transform:rotate(10deg);">G</div>
+  <div id="ringfront" style="position:absolute; inset:0; z-index:3;"></div>
+</div>
+</div>
+<div style="display:flex; justify-content:center; gap:6px; margin-top:14px;" id="dots"></div>
+<p style="text-align:center; font-size:11px; color:var(--text-muted); margin-top:10px;">Vibration only works on supported mobile devices.</p>
+
+<script>
+const items = ["Honours","Degree","Masters","Prelim","Diploma","Certificate"];
+const n = items.length;
+const rx = 130, ry = 34;
+const back = document.getElementById('ringback');
+const front = document.getElementById('ringfront');
+const dotsEl = document.getElementById('dots');
+let angle = 0;
+let velocity = 0;
+let rafId = null;
+let lastActive = 0;
+
+function buzz(ms){
+  if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+const cards = items.map((label, i) => {
+  const card = document.createElement('div');
+  card.style.cssText = `position:absolute; width:78px; height:104px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px; font-size:12px; font-weight:500; transform-origin:center;`;
+  card.textContent = label;
+  return card;
+});
+
+function render(){
+  const step = (2*Math.PI)/n;
+  cards.forEach((card,i)=>{
+    const t = angle + step*i;
+    const x = Math.sin(t)*rx;
+    const y = Math.cos(t)*ry;
+    const depth = Math.cos(t);
+    const scale = 0.72 + 0.38*((depth+1)/2);
+    const tangent = Math.atan2(-Math.sin(t)*ry, Math.cos(t)*rx) * (180/Math.PI);
+    const bend = tangent * 0.35;
+    card.style.left = `calc(50% + ${x}px - 39px)`;
+    card.style.top = `calc(50% + ${y}px - 52px)`;
+    card.style.transform = `scale(${scale.toFixed(2)}) rotate(${(10+bend).toFixed(1)}deg) skewY(${(bend*0.3).toFixed(1)}deg)`;
+    card.style.opacity = (0.7 + 0.3*((depth+1)/2)).toFixed(2);
+    const parent = depth >= 0 ? front : back;
+    if (card.parentElement !== parent) parent.appendChild(card);
+  });
+  const active = ((Math.round(-angle/step) % n) + n) % n;
+  if (active !== lastActive){
+    buzz(8);
+    lastActive = active;
+  }
+  [...dotsEl.children].forEach((d,i)=>{
+    d.style.background = (i===active) ? 'var(--text-accent)' : 'var(--border-strong)';
+  });
+}
+
+for (let i=0;i<n;i++){
+  const d = document.createElement('div');
+  d.style.cssText = "width:6px;height:6px;border-radius:50%;background:var(--border-strong);";
+  dotsEl.appendChild(d);
+}
+render();
+
+function animate(){
+  angle += velocity;
+  velocity *= 0.94;
+  render();
+  if (Math.abs(velocity) > 0.0008){
+    rafId = requestAnimationFrame(animate);
+  } else {
+    const step = (2*Math.PI)/n;
+    const target = Math.round(angle/step)*step;
+    angle += (target - angle) * 0.2;
+    render();
+    if (Math.abs(target - angle) > 0.001){
+      rafId = requestAnimationFrame(animate);
+    } else {
+      angle = target;
+      render();
+      buzz(15);
+    }
+  }
+}
+
+const stage = document.getElementById('stage');
+let dragging = false, lastX = 0, lastT = 0;
+stage.addEventListener('pointerdown', e=>{
+  if (rafId) cancelAnimationFrame(rafId);
+  dragging = true; lastX = e.clientX; lastT = performance.now(); velocity = 0;
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const now = performance.now();
+  const dx = e.clientX - lastX;
+  const dt = Math.max(now - lastT, 1);
+  angle += dx * 0.01;
+  velocity = (dx * 0.01) * (16/dt);
+  lastX = e.clientX; lastT = now;
+  render();
+});
+function release(){
+  if(!dragging) return;
+  dragging = false;
+  rafId = requestAnimationFrame(animate);
+}
+stage.addEventListener('pointerup', release);
+stage.addEventListener('pointercancel', release);
+</script>
