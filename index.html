@@ -74,19 +74,46 @@ function ensureAudio(){
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
 
+function makeNoiseBuffer(durationSec){
+  const sampleRate = audioCtx.sampleRate;
+  const length = Math.max(1, Math.floor(sampleRate * durationSec));
+  const buffer = audioCtx.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++){
+    data[i] = (Math.random() * 2 - 1) * (1 - i/length); // decaying white noise
+  }
+  return buffer;
+}
+
 function tickSound(strength){
   if (!audioCtx) return;
   const t0 = audioCtx.currentTime;
+  const isStrong = strength === 'strong';
+
+  // Short percussive thump: a fast-decaying low tone...
   const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+  const oscGain = audioCtx.createGain();
   osc.type = 'sine';
-  osc.frequency.value = strength === 'strong' ? 220 : 340;
-  gain.gain.setValueAtTime(0.0001, t0);
-  gain.gain.exponentialRampToValueAtTime(strength === 'strong' ? 0.18 : 0.09, t0 + 0.005);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + (strength === 'strong' ? 0.09 : 0.05));
-  osc.connect(gain).connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(isStrong ? 160 : 260, t0);
+  osc.frequency.exponentialRampToValueAtTime(isStrong ? 90 : 150, t0 + 0.04);
+  oscGain.gain.setValueAtTime(0.0001, t0);
+  oscGain.gain.exponentialRampToValueAtTime(isStrong ? 0.22 : 0.11, t0 + 0.003);
+  oscGain.gain.exponentialRampToValueAtTime(0.0001, t0 + (isStrong ? 0.07 : 0.04));
+  osc.connect(oscGain).connect(audioCtx.destination);
   osc.start(t0);
-  osc.stop(t0 + 0.1);
+  osc.stop(t0 + 0.08);
+
+  // ...layered with a tiny noise burst for a "click" transient, like a real tap
+  const noiseSrc = audioCtx.createBufferSource();
+  noiseSrc.buffer = makeNoiseBuffer(0.02);
+  const noiseFilter = audioCtx.createBiquadFilter();
+  noiseFilter.type = 'highpass';
+  noiseFilter.frequency.value = 1500;
+  const noiseGain = audioCtx.createGain();
+  noiseGain.gain.setValueAtTime(isStrong ? 0.12 : 0.06, t0);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+  noiseSrc.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
+  noiseSrc.start(t0);
 }
 
 function visualPulse(strength){
@@ -100,11 +127,25 @@ function visualPulse(strength){
   });
 }
 
+function flashCard(card, strong){
+  if (!card) return;
+  card.style.transition = 'box-shadow 100ms ease-out, border-color 100ms ease-out';
+  card.style.boxShadow = strong
+    ? '0 0 0 2px var(--text-accent), 0 0 14px rgba(245,196,81,0.5)'
+    : '0 0 0 1.5px var(--text-accent)';
+  card.style.borderColor = 'var(--text-accent)';
+  setTimeout(()=>{
+    card.style.boxShadow = 'none';
+    card.style.borderColor = 'var(--border)';
+  }, strong ? 180 : 110);
+}
+
 function buzz(ms){
   const strength = ms >= 12 ? 'strong' : 'light';
   if (supportsVibration){
     navigator.vibrate(ms);
   } else {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     tickSound(strength);
   }
   // visual pulse plays everywhere — cheap extra confirmation, doesn't hurt Android
@@ -139,6 +180,7 @@ function render(){
   const active = ((Math.round(-angle/step) % n) + n) % n;
   if (active !== lastActive){
     buzz(8);
+    flashCard(cards[active], false);
     lastActive = active;
   }
   [...dotsEl.children].forEach((d,i)=>{
@@ -170,6 +212,7 @@ function animate(){
       angle = target;
       render();
       buzz(15);
+      flashCard(cards[lastActive], true);
     }
   }
 }
