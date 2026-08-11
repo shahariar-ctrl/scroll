@@ -97,7 +97,7 @@ function tickSound(strength){
   osc.frequency.setValueAtTime(isStrong ? 160 : 260, t0);
   osc.frequency.exponentialRampToValueAtTime(isStrong ? 90 : 150, t0 + 0.04);
   oscGain.gain.setValueAtTime(0.0001, t0);
-  oscGain.gain.exponentialRampToValueAtTime(isStrong ? 0.22 : 0.11, t0 + 0.003);
+  oscGain.gain.exponentialRampToValueAtTime(isStrong ? 0.10 : 0.05, t0 + 0.003);
   oscGain.gain.exponentialRampToValueAtTime(0.0001, t0 + (isStrong ? 0.07 : 0.04));
   osc.connect(oscGain).connect(audioCtx.destination);
   osc.start(t0);
@@ -110,7 +110,7 @@ function tickSound(strength){
   noiseFilter.type = 'highpass';
   noiseFilter.frequency.value = 1500;
   const noiseGain = audioCtx.createGain();
-  noiseGain.gain.setValueAtTime(isStrong ? 0.12 : 0.06, t0);
+  noiseGain.gain.setValueAtTime(isStrong ? 0.5 : 0.02, t0);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
   noiseSrc.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
   noiseSrc.start(t0);
